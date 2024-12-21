@@ -7,19 +7,17 @@ import (
 )
 
 type Input struct {
-	FirstNumber  *int    `json:"first_number"`
-	SecondNumber *int    `json:"second_number"`
-	Operator     *string `json:"operator"`
+	Array *string `json:"array"`
+	Sign  *string `json:"sign"`
 }
 
 type Output struct {
-	Result float64 `json:"result"`
+	Result *string `json:"result"`
 }
 
-// Обработчик HTTP-запроса
-func CalculateHandler(w http.ResponseWriter, r *http.Request) {
+func CleanHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
-		w.WriteHeader(405)
+		w.WriteHeader(http.StatusMethodNotAllowed)
 		w.Write([]byte("method not allowed"))
 		return
 	}
@@ -29,63 +27,53 @@ func CalculateHandler(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(&input)
 	if err != nil {
-		w.WriteHeader(400)
+		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte(err.Error()))
 		return
 	}
 
-	if input.FirstNumber == nil {
-		w.WriteHeader(400)
-		w.Write([]byte("first_number is missing"))
-		return
-	}
-	if input.SecondNumber == nil {
-		w.WriteHeader(400)
-		w.Write([]byte("second_number is missing"))
-		return
-	}
-	if input.Operator == nil {
-		w.WriteHeader(400)
-		w.Write([]byte("operator is missing"))
+	if input.Array == nil || input.Sign == nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("param is missing :("))
 		return
 	}
 
-	var output Output
+	sign := *input.Sign
 
-	switch *input.Operator {
-	case "+":
-		output.Result = float64(*input.FirstNumber) + float64(*input.SecondNumber)
-	case "-":
-		output.Result = float64(*input.FirstNumber) - float64(*input.SecondNumber)
-	case "*":
-		output.Result = float64(*input.FirstNumber) * float64(*input.SecondNumber)
-	case "/":
-		if *input.SecondNumber == 0 {
-			w.WriteHeader(400)
-			w.Write([]byte("division by zero is not allowed"))
-			return
-		}
-		output.Result = float64(*input.FirstNumber) / float64(*input.SecondNumber)
-	default:
-		w.WriteHeader(400)
-		w.Write([]byte("unknown operator"))
+	if len([]rune(sign)) > 1 {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("некоректно введённый паметр sign: должен быть строкой длиной 1 символ"))
 		return
 	}
+
+	cleanedString := RemoveCharacter(*input.Array, sign)
+
+	output := Output{Result: &cleanedString}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-	respBytes, _ := json.Marshal(output)
-	w.Write(respBytes)
+	json.NewEncoder(w).Encode(output)
+}
+
+func RemoveCharacter(input string, charToRemove string) string {
+	if charToRemove == "" {
+		return input
+	}
+
+	result := []rune{}
+	for _, char := range input {
+		if string(char) != charToRemove {
+			result = append(result, char)
+		}
+	}
+
+	return string(result)
 }
 
 func main() {
-	// Регистрируем обработчик для пути "/calculate"
-	http.HandleFunc("/calculate", CalculateHandler)
-
-	// Запускаем веб-сервер на порту 8081
-	fmt.Println("starting server...")
-	err := http.ListenAndServe("127.0.0.1:8081", nil)
+	http.HandleFunc("/clean", CleanHandler)
+	fmt.Println("starting server on 127.0.0.1:8082...")
+	err := http.ListenAndServe("127.0.0.1:8082", nil)
 	if err != nil {
-		fmt.Println("Ошибка запуска сервера:", err)
+		panic(err)
 	}
 }
